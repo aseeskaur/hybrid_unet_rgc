@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --job-name=folds_test_dsa_all
+#SBATCH --partition dept.appliedmath
+#SBATCH --output=/home/akaur101/data/f25/unet_rgc/outputs/unet_rgc_%j.stdout
+
+#SBATCH --gres=gpu:2
+#SBATCH --time=48:00:00
+
+#SBATCH --mail-user=akaur101@ucmerced.edu
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-type=ALL
+#SBATCH --export=ALL
+
+module load anaconda3
+source activate env_pytorch
+python /home/akaur101/data/f25/unet_rgc/unet_rgc.py  /home/akaur101/data/dsa_images/raw  /home/akaur101/data/dsa_images/gt $1
+
+
