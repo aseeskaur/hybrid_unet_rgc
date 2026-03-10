@@ -26,7 +26,7 @@ image_dir = Path(sys.argv[1])
 mask_dir = Path(sys.argv[2])
 fold = int(sys.argv[3])
 
-unet_seg_dir = Path("/home/akaur101/data/f25/unet/unet_segmentations")
+unet_seg_dir = Path("/home/akaur101/data/sp26/unet/unet_segmentations_full_aug")
 
 train_image_names = {}
 test_image_names = {}
@@ -117,7 +117,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = net()
 model = model.float()
 model = model.to(device=device)
-model.load_state_dict(torch.load(f"/home/akaur101/data/f25/2d_rgc/trained_dsa_models/dsa_rgc_bestmodel_fold{fold}_dict.pth", map_location=device))
+model.load_state_dict(torch.load(f"/home/akaur101/data/sp26/rgc/trained_dsa_models/dsa_rgc_bestmodel_fold{fold}_aug_resamp_dict.pth", map_location=device))
 model.eval()
 
 def img_process(next_cents, padded_image, padded_mask):
@@ -166,7 +166,7 @@ class newcelldata(Dataset):
 
 
 transforms_tensor = transforms.ToTensor()
-save_dir = Path("/home/akaur101/data/f25/unet_rgc/unet_rgc_results/fold_" + str(fold))
+save_dir = Path("/home/akaur101/data/hybrid_unet_rgc/unet_rgc_results/fold_" + str(fold))
 save_dir.mkdir(parents=True, exist_ok=True)
 
 
