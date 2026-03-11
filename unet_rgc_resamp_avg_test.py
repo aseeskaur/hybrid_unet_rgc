@@ -1,4 +1,4 @@
-
+import time
 import numpy as np
 import torch.nn as nn
 import sys
@@ -25,6 +25,7 @@ file_names = Path("/home/akaur101/data/cross_validation/file_names_per_fold")
 image_dir = Path(sys.argv[1])
 mask_dir = Path(sys.argv[2])
 fold = int(sys.argv[3])
+tol = 0.6
 
 unet_seg_dir = Path("/home/akaur101/data/sp26/unet/unet_segmentations_full_aug")
 
@@ -174,7 +175,11 @@ all_results = []
 
 print(f"Testing {len(test_images_padded)} images from fold {fold}")
 
+time_records = []
+fold_start = time.time()
+
 for img_idx, (test_image_padded, test_mask_padded, original_mask) in enumerate(zip(test_images_padded, test_masks_padded, gt_masks)):
+    img_start = time.time()
     print(f"\nProcessing image {img_idx + 1}/{len(test_images_padded)}")
     
     # Get the image name
@@ -242,9 +247,9 @@ for img_idx, (test_image_padded, test_mask_padded, original_mask) in enumerate(z
                 pred = model(images.float())
                 final_pred = torch.sigmoid(pred)
                 
-                pred_temp = torch.where(torch.squeeze(final_pred) < 0.1, 0, 1)
+                pred_temp = torch.where(torch.squeeze(final_pred) < tol, 0, 1)
                 if len(final_pred) == 1:
-                    pred_temp = torch.where((final_pred) < 0.1, 0, 1)
+                    pred_temp = torch.where((final_pred) < tol, 0, 1)
                 
                 pred_ind = torch.argwhere(pred_temp)
                 
@@ -300,24 +305,26 @@ for img_idx, (test_image_padded, test_mask_padded, original_mask) in enumerate(z
     print(f"Completed after {counter} iterations")
 
     
-    recon_mask = np.zeros_like(test_mask_padded)
+    
     flat_list_ind = [item for sublist in all_indices for item in sublist]
     flat_list_pred = [item for sublist in all_pred for item in sublist]
     
+    recon_mask_sum   = np.zeros_like(test_mask_padded, dtype=float)
+    recon_mask_count = np.zeros_like(test_mask_padded, dtype=float)
 
     for i in range(len(flat_list_ind)):
         x = flat_list_ind[i][0]
         y = flat_list_ind[i][1]
-        recon_mask[x, y] = 1
+        val = flat_list_pred[i].cpu().item() if torch.is_tensor(flat_list_pred[i]) else flat_list_pred[i]
+        recon_mask_sum[x, y]   += val
+        recon_mask_count[x, y] += 1
     
-  
+    recon_mask_avg = np.divide(recon_mask_sum, recon_mask_count, where=recon_mask_count > 0)
+    recon_mask     = (recon_mask_avg > tol).astype(float)
     new_recon_mask = recon_mask[40:-40, 40:-40]
     
-
-    np.save(
-        save_dir / f"{image_name}_indices.npy",
-        np.array(flat_list_ind)
-    )
+    
+    np.save(save_dir / f"{image_name}_indices.npy",     np.array(flat_list_ind))
 
     pred_array = np.array([p.cpu().numpy() if torch.is_tensor(p) else p for p in flat_list_pred])
     np.save(
@@ -335,6 +342,9 @@ for img_idx, (test_image_padded, test_mask_padded, original_mask) in enumerate(z
         save_dir / f"{image_name}_snapshot_iterations.npy",
         np.array(saved_iterations)
     )
+
+    np.save(save_dir / f"{image_name}_avg_confidence.npy",      recon_mask_avg[40:-40, 40:-40])
+
     print(f"Saved {len(saved_masks)} iteration snapshots")
 
     plt.imshow(new_recon_mask, cmap="gray")
@@ -343,7 +353,22 @@ for img_idx, (test_image_padded, test_mask_padded, original_mask) in enumerate(z
     
     
     print(f"Image {image_name}: Detected {len(flat_list_ind)} cells in {counter} iterations")
+    img_time = time.time() - img_start
+    print(f"Image {image_name} took {img_time:.2f} seconds")
+    time_records.append({
+        'image_name':    image_name,
+        'time_seconds':  img_time,
+        'num_iterations': counter,
+        'num_detected':  len(flat_list_ind)
+    })
 
+fold_time = time.time() - fold_start
+time_df = pd.DataFrame(time_records)
+time_df['fold'] = fold
+time_df['total_fold_time'] = fold_time
+time_df.to_csv(save_dir / f"timing_record_fold_{fold}.csv", index=False)
+
+print(f"\nTotal time for fold {fold}: {fold_time:.2f} seconds")
 print(f"\nCompleted testing all {len(test_images_padded)} images")
 print(f"Results saved to: {save_dir}")
 
